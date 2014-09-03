@@ -69,6 +69,7 @@ struct TermNode : Node
 };
 
 int determineCommonLvl(point_2f point, MiddleNode* node) {
+   //TODO: can be improved (currently it is dummy. Should be improved by bin-search)
    int curLvl = node->lvl - 1;
    int curXi = node->xi / 2;
    int curYi = node->yi / 2;
@@ -82,6 +83,7 @@ int determineCommonLvl(point_2f point, MiddleNode* node) {
 }
 
 int determineCommonLvl(point_2f p1, point_2f p2) {
+   //TODO: can be improved (currently it is dummy. Should be improved by bin-search)
    int lvl = 0;
    while (calcXiByPoint(p1, lvl) == calcXiByPoint(p2, lvl)
       && calcYiByPoint(p1, lvl) == calcYiByPoint(p2, lvl)) {
