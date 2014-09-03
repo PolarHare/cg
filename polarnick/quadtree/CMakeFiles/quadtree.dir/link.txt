@@ -1,1 +1,0 @@
-/usr/bin/c++    -std=c++11 -Wall -pthread -g    CMakeFiles/quadtree.dir/quadtree.cpp.o  -o quadtree -rdynamic ../../src/libvisualization.a -lgmp -lQtOpenGL -lQtGui -lQtCore -lGLU -lGL -lX11 -lXext 
