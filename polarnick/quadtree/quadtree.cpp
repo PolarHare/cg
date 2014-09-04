@@ -13,6 +13,7 @@
 
 #include "cg/io/point.h"
 
+#define MAX_LEVEL 1024
 #define MAX_LEVEL_RENDER 5
 #define WIDTH 640
 #define HEIGHT 480
@@ -84,28 +85,34 @@ struct TermNode : Node
    {}
 };
 
-int determineCommonLvl(point_2f point, MiddleNode* node) {
-   //TODO: can be improved (currently it is dummy. Should be improved by bin-search)
-   int curLvl = node->lvl - 1;
-   int curXi = node->xi / 2;
-   int curYi = node->yi / 2;
-   while (calcXiByPoint(point, curLvl) != curXi
-      || calcYiByPoint(point, curLvl) != curYi) {
-      curLvl--;
-      curXi /= 2;
-      curYi /= 2;
+int determineCommonLvl(point_2f point, MiddleNode* node, int minLvl) {
+   int l = minLvl;
+   int r = node->lvl;
+   while (l + 1 < r) {
+      int m = (l + r) / 2;
+      if (calcXiByPoint(point, m) == (node->xi >> (node->lvl - m))
+         && calcYiByPoint(point, m) != (node->yi >> (node->lvl - m))) {
+         l = m;
+      } else {
+         r = m;
+      }
    }
-   return curLvl;
+   return l;
 }
 
-int determineCommonLvl(point_2f p1, point_2f p2) {
-   //TODO: can be improved (currently it is dummy. Should be improved by bin-search)
-   int lvl = 0;
-   while (calcXiByPoint(p1, lvl) == calcXiByPoint(p2, lvl)
-      && calcYiByPoint(p1, lvl) == calcYiByPoint(p2, lvl)) {
-      lvl++;
+int determineCommonLvl(point_2f p1, point_2f p2, int minLvl) {
+   int l = minLvl;
+   int r = MAX_LEVEL;
+   while (l + 1 < r) {
+      int m = (l + r) / 2;
+      if (calcXiByPoint(p1, m) == calcXiByPoint(p2, m)
+         && calcYiByPoint(p1, m) == calcYiByPoint(p2, m)) {
+         l = m;
+      } else {
+         r = m;
+      }
    }
-   return lvl - 1;
+   return l;
 }
 
 void MiddleNode::addPoint(point_2f point)
@@ -124,7 +131,7 @@ void MiddleNode::addPoint(point_2f point)
          if (child->xi == calcXiByPoint(point, child->lvl) && child->yi == calcYiByPoint(point, child->lvl)) {
            child->addPoint(point);
          } else {
-            int commonLvl = determineCommonLvl(point, child);
+            int commonLvl = determineCommonLvl(point, child, lvl + 1);
             printf(" commonLvl=%d (with middle node xi=%d yi=%d lvl=%d)\n", commonLvl, child->xi, child->yi, child->lvl);
 
             MiddleNode* commonNode = new MiddleNode(calcXiByPoint(point, commonLvl), calcYiByPoint(point, commonLvl), commonLvl);
@@ -148,7 +155,7 @@ void MiddleNode::addPoint(point_2f point)
          printf(" (adding at terminal node)\n");
          TermNode* term = (TermNode*) childs[index];
          printf("  to terminal child: x=%f y=%f\n", term->point.x, term->point.y);
-         int commonLvl = determineCommonLvl(point, term->point);
+         int commonLvl = determineCommonLvl(point, term->point, lvl + 1);
          printf("  commonLvl=%d (new: x=%f y=%f)\n", commonLvl, point.x, point.y);
          MiddleNode* commonNode = new MiddleNode(calcXiByPoint(point, commonLvl), calcYiByPoint(point, commonLvl), commonLvl);
          printf("  new middle node: xi=%d yi=%d lvl=%d stepX=%f stepY=%f\n", commonNode->xi, commonNode->yi, commonNode->lvl,
