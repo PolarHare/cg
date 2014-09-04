@@ -58,6 +58,7 @@ struct MiddleNode : Node
    int lvl;
 
    Node* childs[4];
+   MiddleNode* linkToMoreDetailed;
 
    MiddleNode(int xi, int yi, int lvl) : Node(false), xi(xi), yi(yi), lvl(lvl)
    {
@@ -65,6 +66,7 @@ struct MiddleNode : Node
       for (int i = 0; i < 4; i++) {
          childs[i] = NULL;
       }
+      linkToMoreDetailed = NULL;
    }
 
    ~MiddleNode() {
@@ -231,7 +233,11 @@ struct triangulation_viewer : cg::visualization::viewer_adapter
             }
          }
       }
-      drawNode(rootNode, drawer);
+      MiddleNode* lvlRoot = lowDetailRootNode;
+      for (int i = 1; i < totalLevels - viewLevel; i++) {
+         lvlRoot = lvlRoot->linkToMoreDetailed;
+      }
+      drawNode(lvlRoot, drawer);
    }
 
    void print(cg::visualization::printer_type & p) const
@@ -239,21 +245,32 @@ struct triangulation_viewer : cg::visualization::viewer_adapter
       p.corner_stream() << "double-click to reset." << cg::visualization::endl
                         << "press mouse rbutton to add vertex (in blue layout)" << cg::visualization::endl
                         << "press l to disable blue layout" << cg::visualization::endl
-                        << "press t to trace quad-tree structure in terminal" << cg::visualization::endl;
+                        << "press t to trace quad-tree structure in terminal" << cg::visualization::endl
+                        << "press a/s to change level of quad tree to be represented (level="
+                         << (viewLevel + 1) << "/" << totalLevels << ")" << cg::visualization::endl;
                         // << "middleNodesCount: " << middleNodesCount << cg::visualization::endl;
    }
 
    bool on_double_click(const point_2f & p)
    {
-      delete rootNode;
-      rootNode = new MiddleNode(0, 0, 0);
+      MiddleNode* curLevel = lowDetailRootNode;
+      while (curLevel->linkToMoreDetailed != NULL) {
+         MiddleNode* next = curLevel->linkToMoreDetailed;
+         delete curLevel;
+         curLevel = next;
+      }
+      delete curLevel;
+
+      viewLevel = 0;
+      totalLevels = 1;
+      lowDetailRootNode = new MiddleNode(0, 0, 0);
       return true;
    }
 
    bool on_press(const point_2f & p)
    {
       printf("Adding point: x=%f y=%f\n", p.x, p.y);
-      rootNode->addPoint(p);
+      lowDetailRootNode->addPoint(p);
       return true;
    }
 
@@ -287,19 +304,29 @@ struct triangulation_viewer : cg::visualization::viewer_adapter
    {
       if (key == Qt::Key_D) {
       } else if (key == Qt::Key_T) {
-         printf("_____Quad-tree dump_____\n");
-         printMiddleNode(rootNode, 1, -1);
-         printf("________________________\n");
+         printf("_____Quad-tree dump (skip-level=%d)_____\n", viewLevel);
+         MiddleNode* lvlRoot = lowDetailRootNode;
+         for (int i = 1; i < totalLevels - viewLevel; i++) {
+            lvlRoot = lvlRoot->linkToMoreDetailed;
+         }
+         printMiddleNode(lvlRoot, 1, -1);
+         printf("________________________________________\n");
       } else if (key == Qt::Key_L) {
          layout = !layout;
+      } else if (key == Qt::Key_S) {
+         viewLevel = (viewLevel + 1) % totalLevels;
+      } else if (key == Qt::Key_A) {
+         viewLevel = (viewLevel - 1 + totalLevels) % totalLevels;
       } else return false;
       return true;
    }
 
 
 private:
+   int viewLevel = 0;
+   int totalLevels = 1;
    bool layout = true;
-   MiddleNode* rootNode = new MiddleNode(0, 0, 0);
+   MiddleNode* lowDetailRootNode = new MiddleNode(0, 0, 0);
 };
 
 int main(int argc, char ** argv)
