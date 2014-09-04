@@ -23,6 +23,11 @@
 #define MAX_Y (HEIGHT / 2)
 #define P 0.5
 
+bool isEagle() {
+   int randValue = std::rand();
+   return randValue < P * RAND_MAX;
+}
+
 using cg::point_2;
 using cg::point_2f;
 using cg::vector_2f;
@@ -78,7 +83,7 @@ struct MiddleNode : Node
       }
    }
 
-   void addPoint(point_2f point);
+   bool addPoint(point_2f point);
 };
 
 struct TermNode : Node
@@ -118,7 +123,7 @@ int determineCommonLvl(point_2f p1, point_2f p2, int minLvl) {
    return l;
 }
 
-void MiddleNode::addPoint(point_2f point)
+bool MiddleNode::addPoint(point_2f point)
 {
    printf("Adding point at: xi=%d yi=%d lvl=%d\n", xi, yi, lvl);
    int index;
@@ -132,55 +137,98 @@ void MiddleNode::addPoint(point_2f point)
          printf(" (adding at middle node)\n");
          MiddleNode* child = (MiddleNode*) childs[index];
          if (child->xi == calcXiByPoint(point, child->lvl) && child->yi == calcYiByPoint(point, child->lvl)) {
-           child->addPoint(point);
+           return child->addPoint(point);
          } else {
-            int commonLvl = determineCommonLvl(point, child, lvl + 1);
-            printf(" commonLvl=%d (with middle node xi=%d yi=%d lvl=%d)\n", commonLvl, child->xi, child->yi, child->lvl);
+            bool shouldAdd = false;
+            if (linkToMoreDetailed == NULL) {
+               shouldAdd = true;
+            } else if (linkToMoreDetailed->addPoint(point) && isEagle()) {
+               shouldAdd = true;
+            }
+            if (shouldAdd) {
 
+               int commonLvl = determineCommonLvl(point, child, lvl + 1);
+               printf(" commonLvl=%d (with middle node xi=%d yi=%d lvl=%d)\n", commonLvl, child->xi, child->yi, child->lvl);
+
+               MiddleNode* commonNode = new MiddleNode(calcXiByPoint(point, commonLvl), calcYiByPoint(point, commonLvl), commonLvl);
+               printf("  new middle node: xi=%d yi=%d lvl=%d\n", commonNode->xi, commonNode->yi, commonNode->lvl);
+               childs[index] = commonNode;
+               int commonNodePointIndex;
+               int commonNodeOldChildIndex;
+               {
+                  int pxi = calcXiByPoint(point, commonLvl + 1);
+                  int pyi = calcYiByPoint(point, commonLvl + 1);
+                  commonNodePointIndex = (pxi % 2) * 2 + (pyi % 2);
+                  pxi = (child->xi) >> (child->lvl - commonLvl - 1);
+                  pyi = (child->yi) >> (child->lvl - commonLvl - 1);
+                  commonNodeOldChildIndex = (pxi % 2) * 2 + (pyi % 2);
+               }
+               printf("  nodes located at indexes: %d, %d\n", commonNodePointIndex, commonNodeOldChildIndex);
+               commonNode->childs[commonNodePointIndex] = new TermNode(point);
+               commonNode->childs[commonNodeOldChildIndex] = child;
+
+               if (linkToMoreDetailed != NULL) {
+                  commonNode->linkToMoreDetailed = (MiddleNode*) linkToMoreDetailed->childs[index];
+               }
+               return true;
+            } else {
+               return false;
+            }
+         }
+      } else {
+         bool shouldAdd = false;
+         if (linkToMoreDetailed == NULL) {
+            shouldAdd = true;
+         } else if (linkToMoreDetailed->addPoint(point) && isEagle()) {
+            shouldAdd = true;
+         }
+         if (shouldAdd) {
+
+            printf(" (adding at terminal node)\n");
+            TermNode* term = (TermNode*) childs[index];
+            printf("  to terminal child: x=%f y=%f\n", term->point.x, term->point.y);
+            int commonLvl = determineCommonLvl(point, term->point, lvl + 1);
+            printf("  commonLvl=%d (new: x=%f y=%f)\n", commonLvl, point.x, point.y);
             MiddleNode* commonNode = new MiddleNode(calcXiByPoint(point, commonLvl), calcYiByPoint(point, commonLvl), commonLvl);
-            printf("  new middle node: xi=%d yi=%d lvl=%d\n", commonNode->xi, commonNode->yi, commonNode->lvl);
+            printf("  new middle node: xi=%d yi=%d lvl=%d stepX=%f stepY=%f\n", commonNode->xi, commonNode->yi, commonNode->lvl,
+               (WIDTH * 1.0 / (1 << commonNode->lvl)), (HEIGHT * 1.0 / (1 << commonNode->lvl)));
             childs[index] = commonNode;
             int commonNodePointIndex;
-            int commonNodeOldChildIndex;
+            int commonNodeOldTermIndex;
             {
                int pxi = calcXiByPoint(point, commonLvl + 1);
                int pyi = calcYiByPoint(point, commonLvl + 1);
                commonNodePointIndex = (pxi % 2) * 2 + (pyi % 2);
-               pxi = (child->xi) >> (child->lvl - commonLvl - 1);
-               pyi = (child->yi) >> (child->lvl - commonLvl - 1);
-               commonNodeOldChildIndex = (pxi % 2) * 2 + (pyi % 2);
+               pxi = calcXiByPoint(term->point, commonLvl + 1);
+               pyi = calcYiByPoint(term->point, commonLvl + 1);
+               commonNodeOldTermIndex = (pxi % 2) * 2 + (pyi % 2);
             }
-            printf("  nodes located at indexes: %d, %d\n", commonNodePointIndex, commonNodeOldChildIndex);
+            printf("  points located at indexes: %d, %d\n", commonNodePointIndex, commonNodeOldTermIndex);
             commonNode->childs[commonNodePointIndex] = new TermNode(point);
-            commonNode->childs[commonNodeOldChildIndex] = child;
+            commonNode->childs[commonNodeOldTermIndex] = term;
+
+            if (linkToMoreDetailed != NULL) {
+               commonNode->linkToMoreDetailed = (MiddleNode*) linkToMoreDetailed->childs[index];
+            }
+            return true;
+         } else {
+            return false;
          }
-      } else {
-         printf(" (adding at terminal node)\n");
-         TermNode* term = (TermNode*) childs[index];
-         printf("  to terminal child: x=%f y=%f\n", term->point.x, term->point.y);
-         int commonLvl = determineCommonLvl(point, term->point, lvl + 1);
-         printf("  commonLvl=%d (new: x=%f y=%f)\n", commonLvl, point.x, point.y);
-         MiddleNode* commonNode = new MiddleNode(calcXiByPoint(point, commonLvl), calcYiByPoint(point, commonLvl), commonLvl);
-         printf("  new middle node: xi=%d yi=%d lvl=%d stepX=%f stepY=%f\n", commonNode->xi, commonNode->yi, commonNode->lvl,
-            (WIDTH * 1.0 / (1 << commonNode->lvl)), (HEIGHT * 1.0 / (1 << commonNode->lvl)));
-         childs[index] = commonNode;
-         int commonNodePointIndex;
-         int commonNodeOldTermIndex;
-         {
-            int pxi = calcXiByPoint(point, commonLvl + 1);
-            int pyi = calcYiByPoint(point, commonLvl + 1);
-            commonNodePointIndex = (pxi % 2) * 2 + (pyi % 2);
-            pxi = calcXiByPoint(term->point, commonLvl + 1);
-            pyi = calcYiByPoint(term->point, commonLvl + 1);
-            commonNodeOldTermIndex = (pxi % 2) * 2 + (pyi % 2);
-         }
-         printf("  points located at indexes: %d, %d\n", commonNodePointIndex, commonNodeOldTermIndex);
-         commonNode->childs[commonNodePointIndex] = new TermNode(point);
-         commonNode->childs[commonNodeOldTermIndex] = term;
       }
    } else {
-      printf("New terminal node at child index=%d\n", index);
-      childs[index] = new TermNode(point);
+      bool shouldAdd = false;
+      if (linkToMoreDetailed == NULL) {
+         shouldAdd = true;
+      } else if (linkToMoreDetailed->addPoint(point) && isEagle()) {
+         shouldAdd = true;
+      }
+      if (shouldAdd) {
+         printf("New terminal node at child index=%d\n", index);
+         childs[index] = new TermNode(point);
+         return true;
+      } else {
+         return false;
+      }
    }
 }
 
@@ -270,7 +318,14 @@ struct triangulation_viewer : cg::visualization::viewer_adapter
    bool on_press(const point_2f & p)
    {
       printf("Adding point: x=%f y=%f\n", p.x, p.y);
-      lowDetailRootNode->addPoint(p);
+      if (lowDetailRootNode->addPoint(p) && isEagle()) {
+         printf("New skip-level added\n");
+         totalLevels++;
+         MiddleNode* newLevel = new MiddleNode(0, 0, 0);
+         newLevel->addPoint(p);
+         newLevel->linkToMoreDetailed = lowDetailRootNode;
+         lowDetailRootNode = newLevel;
+      }
       return true;
    }
 
