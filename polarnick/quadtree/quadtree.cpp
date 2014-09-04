@@ -13,7 +13,7 @@
 
 #include "cg/io/point.h"
 
-#define MAX_LEVEL 1024
+#define MAX_LEVEL 30
 #define MAX_LEVEL_RENDER 5
 #define WIDTH 640
 #define HEIGHT 480
