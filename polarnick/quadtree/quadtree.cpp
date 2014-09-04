@@ -25,14 +25,18 @@ using cg::point_2;
 using cg::point_2f;
 using cg::vector_2f;
 
+static int middleNodesCount = 0;
+
 int calcXiByPoint(point_2f point, int lvl)
 {
-   return (point.x - MIN_X) * (1 << lvl) / WIDTH;
+   int res = (point.x - MIN_X) * (1 << lvl) / WIDTH;
+   return res;
 }
 
 int calcYiByPoint(point_2f point, int lvl)
 {
-   return (point.y - MIN_Y) * (1 << lvl) / HEIGHT;
+   int res = (point.y - MIN_Y) * (1 << lvl) / HEIGHT;
+   return res;
 }
 
 struct Node
@@ -41,6 +45,8 @@ struct Node
 
    Node(bool isTerm) : isTerm(isTerm)
    {}
+
+   virtual ~Node() {}
 };
 
 struct MiddleNode : Node
@@ -53,8 +59,18 @@ struct MiddleNode : Node
 
    MiddleNode(int xi, int yi, int lvl) : Node(false), xi(xi), yi(yi), lvl(lvl)
    {
+      middleNodesCount++;
       for (int i = 0; i < 4; i++) {
          childs[i] = NULL;
+      }
+   }
+
+   ~MiddleNode() {
+      middleNodesCount--;
+      for (int i = 0; i < 4; i++) {
+         if (childs[i] != NULL) {
+            delete childs[i];
+         }
       }
    }
 
@@ -94,24 +110,25 @@ int determineCommonLvl(point_2f p1, point_2f p2) {
 
 void MiddleNode::addPoint(point_2f point)
 {
-   printf("Add point to: xi=%d yi=%d lvl=%d\n", xi, yi, lvl);
+   printf("Adding point at: xi=%d yi=%d lvl=%d\n", xi, yi, lvl);
    int index;
    {
       int pxi = calcXiByPoint(point, lvl + 1);
       int pyi = calcYiByPoint(point, lvl + 1);
       index = (pxi % 2) * 2 + (pyi % 2);
    }
-   printf(" to child %d\n", index);
    if (childs[index] != NULL) {
       if (!childs[index]->isTerm) {
+         printf(" (adding at middle node)\n");
          MiddleNode* child = (MiddleNode*) childs[index];
          if (child->xi == calcXiByPoint(point, child->lvl) && child->yi == calcYiByPoint(point, child->lvl)) {
            child->addPoint(point);
          } else {
             int commonLvl = determineCommonLvl(point, child);
-            printf(" commonLvl=%d (with xi=%d yi=%d lvl=%d)\n", commonLvl, child->xi, child->yi, child->lvl);
+            printf(" commonLvl=%d (with middle node xi=%d yi=%d lvl=%d)\n", commonLvl, child->xi, child->yi, child->lvl);
 
             MiddleNode* commonNode = new MiddleNode(calcXiByPoint(point, commonLvl), calcYiByPoint(point, commonLvl), commonLvl);
+            printf("  new middle node: xi=%d yi=%d lvl=%d\n", commonNode->xi, commonNode->yi, commonNode->lvl);
             childs[index] = commonNode;
             int commonNodePointIndex;
             int commonNodeOldChildIndex;
@@ -119,21 +136,23 @@ void MiddleNode::addPoint(point_2f point)
                int pxi = calcXiByPoint(point, commonLvl + 1);
                int pyi = calcYiByPoint(point, commonLvl + 1);
                commonNodePointIndex = (pxi % 2) * 2 + (pyi % 2);
-               pxi = (child->xi) >> (child->lvl - commonLvl);
-               pyi = (child->xi) >> (child->lvl - commonLvl);
+               pxi = (child->xi) >> (child->lvl - commonLvl - 1);
+               pyi = (child->yi) >> (child->lvl - commonLvl - 1);
                commonNodeOldChildIndex = (pxi % 2) * 2 + (pyi % 2);
             }
-            printf("  nodes located at indexes: %d, %d\n" + commonNodePointIndex, commonNodeOldChildIndex);
+            printf("  nodes located at indexes: %d, %d\n", commonNodePointIndex, commonNodeOldChildIndex);
             commonNode->childs[commonNodePointIndex] = new TermNode(point);
             commonNode->childs[commonNodeOldChildIndex] = child;
          }
       } else {
-         printf(" child is terminal node\n");
+         printf(" (adding at terminal node)\n");
          TermNode* term = (TermNode*) childs[index];
-         printf(" to terminal child: x=%f y=%f\n", term->point.x, term->point.y);
+         printf("  to terminal child: x=%f y=%f\n", term->point.x, term->point.y);
          int commonLvl = determineCommonLvl(point, term->point);
-         printf(" commonLvl=%d (new: x=%f y=%f)\n", commonLvl, point.x, point.y);
+         printf("  commonLvl=%d (new: x=%f y=%f)\n", commonLvl, point.x, point.y);
          MiddleNode* commonNode = new MiddleNode(calcXiByPoint(point, commonLvl), calcYiByPoint(point, commonLvl), commonLvl);
+         printf("  new middle node: xi=%d yi=%d lvl=%d stepX=%f stepY=%f\n", commonNode->xi, commonNode->yi, commonNode->lvl,
+            (WIDTH * 1.0 / (1 << commonNode->lvl)), (HEIGHT * 1.0 / (1 << commonNode->lvl)));
          childs[index] = commonNode;
          int commonNodePointIndex;
          int commonNodeOldTermIndex;
@@ -145,12 +164,12 @@ void MiddleNode::addPoint(point_2f point)
             pyi = calcYiByPoint(term->point, commonLvl + 1);
             commonNodeOldTermIndex = (pxi % 2) * 2 + (pyi % 2);
          }
-         printf("  points located at indexes: %d, %d\n" + commonNodePointIndex, commonNodeOldTermIndex);
+         printf("  points located at indexes: %d, %d\n", commonNodePointIndex, commonNodeOldTermIndex);
          commonNode->childs[commonNodePointIndex] = new TermNode(point);
          commonNode->childs[commonNodeOldTermIndex] = term;
       }
    } else {
-      printf(" new terminal node\n");
+      printf("New terminal node at child index=%d\n", index);
       childs[index] = new TermNode(point);
    }
 }
@@ -163,26 +182,26 @@ struct triangulation_viewer : cg::visualization::viewer_adapter
 
    void drawNode(const MiddleNode* node, cg::visualization::drawer_type & drawer) const
    {
-      float stepX = (MAX_X - MIN_X) / (2 << node->lvl);
-      float stepY = (MAX_Y - MIN_Y) / (2 << node->lvl);
+      float stepX = (MAX_X - MIN_X * 1.0) / (2 << node->lvl);
+      float stepY = (MAX_Y - MIN_Y * 1.0) / (2 << node->lvl);
       point_2f nodePoint(MIN_X + stepX * (2 * node->xi + 1), MIN_Y + stepY * (2 * node->yi + 1));
       drawer.set_color(Qt::red);
-      drawer.draw_point(nodePoint, MAX_LEVEL_RENDER + 2);
+      drawer.draw_point(nodePoint, 3);//MAX_LEVEL_RENDER + 2);
       for (int i = 0; i < 4; i++) {
          if (node->childs[i] != NULL) {
             if (!node->childs[i]->isTerm) {
                MiddleNode* childNode = (MiddleNode*) node->childs[i];
-               stepX = (MAX_X - MIN_X) / (2 << childNode->lvl);
-               stepY = (MAX_Y - MIN_Y) / (2 << childNode->lvl);
+               stepX = (MAX_X - MIN_X * 1.0) / (2 << childNode->lvl);
+               stepY = (MAX_Y - MIN_Y * 1.0) / (2 << childNode->lvl);
                point_2f childNodePoint(MIN_X + stepX * (2 * childNode->xi + 1), MIN_Y + stepY * (2 * childNode->yi + 1));
                drawer.set_color(Qt::gray);
                drawer.draw_line(nodePoint, childNodePoint, 2);
                drawNode(childNode, drawer);
             } else {
                drawer.set_color(Qt::gray);
-               drawer.draw_line(nodePoint, ((TermNode*) node->childs[i])->point, 2);
+               drawer.draw_line(nodePoint, ((TermNode*) node->childs[i])->point, 1);
                drawer.set_color(Qt::green);
-               drawer.draw_point(((TermNode*) node->childs[i])->point, 3);
+               drawer.draw_point(((TermNode*) node->childs[i])->point, 2);
             }
          }
       }
@@ -190,37 +209,43 @@ struct triangulation_viewer : cg::visualization::viewer_adapter
 
    void draw(cg::visualization::drawer_type & drawer) const
    {
-      drawer.set_color(Qt::darkBlue);
-      for (int lvl = MAX_LEVEL_RENDER - 1; lvl >= 0; lvl--) {
-         float stepX = (MAX_X - MIN_X) / (2 << lvl);
-         float stepY = (MAX_Y - MIN_Y) / (2 << lvl);
-         int thickness = MAX_LEVEL_RENDER - lvl + 1;
-         for (int xi = 1; xi < 2 << lvl; xi++) {
-            drawer.draw_line(point_2f(MIN_X + xi * stepX, MIN_Y), point_2f(MIN_X + xi * stepX, MAX_Y), thickness);
-         }
-         for (int yi = 1; yi < 2 << lvl; yi++) {
-            drawer.draw_line(point_2f(MIN_X, MIN_Y + yi * stepY), point_2f(MAX_X, MIN_Y + yi * stepY), thickness);
+      if (layout) {
+         drawer.set_color(Qt::darkBlue);
+         for (int lvl = MAX_LEVEL_RENDER - 1; lvl >= 0; lvl--) {
+            float stepX = (MAX_X - MIN_X) / (2 << lvl);
+            float stepY = (MAX_Y - MIN_Y) / (2 << lvl);
+            int thickness = MAX_LEVEL_RENDER - lvl + 1;
+            for (int xi = 1; xi < 2 << lvl; xi++) {
+               drawer.draw_line(point_2f(MIN_X + xi * stepX, MIN_Y), point_2f(MIN_X + xi * stepX, MAX_Y), thickness);
+            }
+            for (int yi = 1; yi < 2 << lvl; yi++) {
+               drawer.draw_line(point_2f(MIN_X, MIN_Y + yi * stepY), point_2f(MAX_X, MIN_Y + yi * stepY), thickness);
+            }
          }
       }
-      drawNode(&rootNode, drawer);
+      drawNode(rootNode, drawer);
    }
 
    void print(cg::visualization::printer_type & p) const
    {
       p.corner_stream() << "double-click to reset." << cg::visualization::endl
-                        << "press mouse rbutton to add vertex." << cg::visualization::endl
-                        << "press d to switch debug level" << cg::visualization::endl
+                        << "press mouse rbutton to add vertex (in blue layout)" << cg::visualization::endl
+                        << "press l to disable blue layout" << cg::visualization::endl
                         << "press t to trace quad-tree structure in terminal" << cg::visualization::endl;
+                        // << "middleNodesCount: " << middleNodesCount << cg::visualization::endl;
    }
 
    bool on_double_click(const point_2f & p)
    {
-      rootNode.addPoint(p);
+      delete rootNode;
+      rootNode = new MiddleNode(0, 0, 0);
       return true;
    }
 
    bool on_press(const point_2f & p)
    {
+      printf("Adding point: x=%f y=%f\n", p.x, p.y);
+      rootNode->addPoint(p);
       return true;
    }
 
@@ -234,27 +259,39 @@ struct triangulation_viewer : cg::visualization::viewer_adapter
       return true;
    }
 
+   void printMiddleNode(MiddleNode* node, int lvl, int index)
+   {
+      printf("%d\t %d\t xi=%d yi=%d lvl=%d\n", lvl, index, node->xi, node->yi, node->lvl);
+      for (int i = 0; i < 4; i++) {
+         if (node->childs[i] != NULL) {
+            if (!node->childs[i]->isTerm) {
+               MiddleNode* childNode = (MiddleNode*) node->childs[i];
+               printMiddleNode(childNode, lvl + 1, i);
+            } else {
+               point_2f point = ((TermNode*) node->childs[i])->point;
+               printf("%d\t %d\t x=%f y=%f\n", lvl + 1, i, point.x, point.y);
+            }
+         }
+      }
+   }
+
    bool on_key(int key)
    {
       if (key == Qt::Key_D) {
       } else if (key == Qt::Key_T) {
-         // if (in_building_) return false;
-         // std::ofstream out("../../tests/tests/" + std::to_string(current_test++));
-         // out << poly.size() << std::endl;
-         // for (auto cont : poly) {
-         //    out << cont.size() << std::endl;
-         //    for (size_t i = 0; i < cont.size(); i++) {
-         //       out << cont[i].x << " " << cont[i].y << std::endl;
-         //    }
-         // }
+         printf("_____Quad-tree dump_____\n");
+         printMiddleNode(rootNode, 1, -1);
+         printf("________________________\n");
+      } else if (key == Qt::Key_L) {
+         layout = !layout;
       } else return false;
       return true;
    }
 
 
 private:
-   int debugLevel = 0;
-   MiddleNode rootNode = MiddleNode(0, 0, 0);
+   bool layout = true;
+   MiddleNode* rootNode = new MiddleNode(0, 0, 0);
 };
 
 int main(int argc, char ** argv)
