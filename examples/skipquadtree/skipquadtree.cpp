@@ -1,6 +1,6 @@
 #include <cg/visualization/viewer_adapter.h>
 #include <QtGui/qapplication.h>
-#include "skipquadtree.hpp"
+#include <cg/structures/skipquadtree.h>
 
 #define MAX_LEVEL_RENDER 5
 #define WIDTH 640
@@ -100,11 +100,19 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
             pointsCountToEnter--;
             xs[pointsCountToEnter] = p.x;
             ys[pointsCountToEnter] = p.y;
+            if (pointsCountToEnter == 1) {
+                printf("One point of rectangle:    x=%f y=%f\n", p.x, p.y);
+            }
             if (pointsCountToEnter == 0) {
-                tree.getContain(Range(-1,
-                                std::min(xs[0], xs[1]), std::max(xs[0], xs[1]),
-                                std::min(ys[0], ys[1]), std::max(ys[0], ys[1])),
-                        0.1);
+                printf("Secont point of rectangle: x=%f y=%f\n", p.x, p.y);
+                Range rect(-1, std::min(xs[0], xs[1]), std::max(xs[0], xs[1]),
+                               std::min(ys[0], ys[1]), std::max(ys[0], ys[1]));
+                auto points = tree.getContain(rect, 0.1);
+                std::cout << rect << std::endl;
+                std::cout << "In rect " << rect << " points found: " << points.size() << std::endl;
+                for (std::pair<int, point_2f> pointWithId : points) {
+                    std::cout << " id=" << pointWithId.first << "\t" << pointWithId.second << std::endl;
+                }
             }
             return true;
         } else {

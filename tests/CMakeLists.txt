@@ -14,6 +14,7 @@ include_directories(${Boost_INCLUDE_DIRS})
 link_directories(${Boost_LIBRARYDIR})
 
 set(SOURCES
+   skipquadtree.cpp
    triangulation.cpp
    orientation.cpp
    has_intersection.cpp

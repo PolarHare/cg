@@ -1,24 +1,112 @@
-#include <vector>
-#include <fstream>
-#include <utility>
-#include <algorithm>
+#pragma once
+
 #include <list>
 #include <memory>
 
-#include <QColor>
-#include <QApplication>
-
-#include "cg/visualization/viewer_adapter.h"
-#include "cg/visualization/draw_util.h"
-
-#include "cg/triangulation/triangulation.h"
-
 #include "cg/io/point.h"
-#include "skipquadtree.hpp"
+
+using cg::point_2f;
+
+bool isEagle();
+
+struct Range {
+    int lvl;
+    float fromX;
+    float toX;
+    float fromY;
+    float toY;
+
+    Range(int lvl, float fromX, float toX, float fromY, float toY)
+            : lvl(lvl), fromX(fromX), toX(toX), fromY(fromY), toY(toY) {
+    }
+
+    Range(float fromX, float toX, float fromY, float toY)
+            : Range(-1, fromX, toX, fromY, toY) {
+    }
+
+    float getMiddleX() const;
+
+    float getMiddleY() const;
+
+    point_2f getMiddlePoint() const;
+
+    Range localize(point_2f point);
+
+    int recognizePartId(point_2f point);
+
+};
+
+std::ostream &operator<<(std::ostream &os, Range const &range);
+
+static int nodesCount = 0;
+static int nodeNextId = 1;
+
+struct Node {
+
+    int id;
+
+    Node() {
+        id = nodeNextId;
+        nodeNextId++;
+        nodesCount++;
+    }
+
+    virtual std::list<std::pair<int, point_2f>> getContain(Range range, float eps) = 0;
+
+    virtual std::list<std::pair<int, point_2f>> getAll() = 0;
+
+    virtual ~Node() {
+        nodesCount--;
+    }
+};
+
+std::ostream &operator<<(std::ostream &os, Node const &node);
+
+struct MiddleNode : Node {
+    Range range;
+    std::shared_ptr<Node> children[4];
+    std::shared_ptr<MiddleNode> linkToMoreDetailed;
+
+    MiddleNode(Range range) : range(range) {
+    }
+
+    bool addPoint(point_2f point);
+
+    virtual std::list<std::pair<int, point_2f>> getContain(Range range, float eps) override;
+
+    virtual std::list<std::pair<int, point_2f>> getAll() override;
+};
+
+struct TermNode : Node {
+    point_2f point;
+
+    TermNode(point_2f point) : point(point) {
+    }
+
+    virtual std::list<std::pair<int, point_2f>> getContain(Range range, float eps) override;
+
+    virtual std::list<std::pair<int, point_2f>> getAll() override;
+};
+
+struct SkipQuadTree {
+    float fromX;
+    float toX;
+    float fromY;
+    float toY;
+    int skipLevels = 1;
+    std::shared_ptr<MiddleNode> lowDetailedRoot;
+
+    SkipQuadTree(float fromX, float toX, float fromY, float toY);
+
+    std::list<std::pair<int, point_2f>> getContain(Range range, float eps);
+
+    bool addPoint(point_2f point);
+};
+
+//_______________________________________________________IMPLEMENTATION_________________________________________________
 
 using cg::point_2f;
 using cg::vector_2f;
-using cg::rectangle_2f;
 
 #define P 0.7
 
@@ -62,8 +150,8 @@ Range Range::localize(point_2f point) {
     }
     return Range(lvl == -1 ? -1 : lvl + 1,
             resFromX, resToX, resFromY, resToY);
-}
-
+}//13
+//02
 int Range::recognizePartId(point_2f point) {
     if (point.x < fromX || point.x >= toX
             || point.y < fromY || point.y >= toY) {
@@ -249,7 +337,6 @@ bool MiddleNode::addPoint(point_2f point) {
                     std::shared_ptr<MiddleNode> commonNode(new MiddleNode(commonRange));
                     int commonNodePointIndex = commonRange.recognizePartId(point);
                     int commonNodeOldChildIndex = commonRange.recognizePartId(child->range.getMiddlePoint());
-                    printf("  nodes located at indexes: %d, %d\n", commonNodePointIndex, commonNodeOldChildIndex);
                     MiddleNode *commonChild = dynamic_cast<MiddleNode *>(children[index].get());
                     commonChild->children[commonNodePointIndex] = std::shared_ptr<Node>(new TermNode(point));
                     commonChild->children[commonNodeOldChildIndex] = std::shared_ptr<Node>(child);
@@ -269,8 +356,11 @@ bool MiddleNode::addPoint(point_2f point) {
             } else if (linkToMoreDetailed->addPoint(point) && isEagle()) {
                 shouldAdd = true;
             }
+            TermNode *term = (TermNode *) children[index].get();
+            if (term->point.x == point.x && term->point.y == point.y) {
+                shouldAdd = false;
+            }
             if (shouldAdd) {
-                TermNode *term = (TermNode *) children[index].get();
                 Range commonRange = determineCommonRange(point, term->point, range);
                 std::shared_ptr<MiddleNode> commonNode(new MiddleNode(commonRange));
                 int commonNodePointIndex = commonRange.recognizePartId(point);
