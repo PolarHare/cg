@@ -11,7 +11,6 @@
 #include "cg/visualization/viewer_adapter.h"
 #include "cg/visualization/draw_util.h"
 
-#include <cg/primitives/contour.h>
 #include "cg/triangulation/triangulation.h"
 
 #include "cg/io/point.h"
@@ -30,15 +29,15 @@ bool isEagle() {
 }
 
 // Range implementation BEGIN
-float Range::getMiddleX() {
+float Range::getMiddleX() const {
     return (fromX + toX) / 2;
 }
 
-float Range::getMiddleY() {
+float Range::getMiddleY() const {
     return (fromY + toY) / 2;
 }
 
-point_2f Range::getMiddlePoint() {
+point_2f Range::getMiddlePoint() const {
     return point_2f(getMiddleX(), getMiddleY());
 }
 
@@ -90,7 +89,7 @@ std::ostream &operator<<(std::ostream &os, Range const &range) {
 // Node implementation BEGIN
 std::ostream &operator<<(std::ostream &os, Node const &node) {
     os << "id=" << node.id << " ";
-    const MiddleNode *middleNode = dynamic_cast<const MiddleNode*>(&node);
+    const MiddleNode *middleNode = dynamic_cast<const MiddleNode *>(&node);
     if (middleNode != NULL) {
         os << middleNode->range << "children[";
         for (int i = 0; i < 4; i++) {
@@ -177,7 +176,7 @@ std::list<std::pair<int, point_2f>> MiddleNode::getContain(Range rect, float eps
                 continue;
             }
             if (cur->linkToMoreDetailed != NULL) {
-                MiddleNode* child = dynamic_cast<MiddleNode *>(cur->children[i].get());
+                MiddleNode *child = dynamic_cast<MiddleNode *>(cur->children[i].get());
                 if (child != NULL && child->range.lvl == cur->range.lvl + 1) {
                     childWasGetted[i] = true;
                     gettedCount++;
@@ -233,7 +232,7 @@ std::list<std::pair<int, point_2f>> MiddleNode::getAll() {
 bool MiddleNode::addPoint(point_2f point) {
     int index = range.recognizePartId(point);
     if (children[index] != NULL) {
-        MiddleNode* child = dynamic_cast<MiddleNode*>(children[index].get());
+        MiddleNode *child = dynamic_cast<MiddleNode *>(children[index].get());
         if (child != NULL) {
             if (child->range.recognizePartId(point) != -1) {
                 return child->addPoint(point);
@@ -251,7 +250,7 @@ bool MiddleNode::addPoint(point_2f point) {
                     int commonNodePointIndex = commonRange.recognizePartId(point);
                     int commonNodeOldChildIndex = commonRange.recognizePartId(child->range.getMiddlePoint());
                     printf("  nodes located at indexes: %d, %d\n", commonNodePointIndex, commonNodeOldChildIndex);
-                    MiddleNode* commonChild = dynamic_cast<MiddleNode*>(children[index].get());
+                    MiddleNode *commonChild = dynamic_cast<MiddleNode *>(children[index].get());
                     commonChild->children[commonNodePointIndex] = std::shared_ptr<Node>(new TermNode(point));
                     commonChild->children[commonNodeOldChildIndex] = std::shared_ptr<Node>(child);
                     if (linkToMoreDetailed != NULL) {
@@ -303,3 +302,30 @@ bool MiddleNode::addPoint(point_2f point) {
     }
 }
 // MiddleNode implementation END
+
+// SkipQuadTree implementation BEGIN
+SkipQuadTree::SkipQuadTree(float fromX, float toX, float fromY, float toY)
+        : fromX(fromX), toX(toX), fromY(fromY), toY(toY) {
+    lowDetailedRoot = std::shared_ptr<MiddleNode>(new MiddleNode(Range(0, fromX, toX, fromY, toY)));
+}
+
+std::list<std::pair<int, point_2f>> SkipQuadTree::getContain(Range range, float eps) {
+    return lowDetailedRoot->getContain(range, eps);
+}
+
+bool SkipQuadTree::addPoint(point_2f p) {
+    if (p.x < fromX || p.x >= toX
+            || p.y < fromY || p.y>=toY){
+        return false;
+    }
+    if (lowDetailedRoot->addPoint(p) && isEagle()) {
+        skipLevels++;
+
+        MiddleNode *newLevel = new MiddleNode(Range(0, fromX, toX, fromY, toY));
+        newLevel->addPoint(p);
+        newLevel->linkToMoreDetailed = lowDetailedRoot;
+        lowDetailedRoot = std::shared_ptr<MiddleNode>(newLevel);
+    }
+    return true;
+}
+// SkipQuadTree implementation END

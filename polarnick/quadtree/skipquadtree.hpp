@@ -24,11 +24,11 @@ struct Range {
             : Range(-1, fromX, toX, fromY, toY) {
     }
 
-    float getMiddleX();
+    float getMiddleX() const;
 
-    float getMiddleY();
+    float getMiddleY() const;
 
-    point_2f getMiddlePoint();
+    point_2f getMiddlePoint() const;
 
     Range localize(point_2f point);
 
@@ -82,4 +82,19 @@ struct TermNode : Node {
     virtual std::list<std::pair<int, point_2f>> getContain(Range range, float eps) override;
 
     virtual std::list<std::pair<int, point_2f>> getAll() override;
+};
+
+struct SkipQuadTree {
+    float fromX;
+    float toX;
+    float fromY;
+    float toY;
+    int skipLevels = 1;
+    std::shared_ptr<MiddleNode> lowDetailedRoot;
+
+    SkipQuadTree(float fromX, float toX, float fromY, float toY);
+
+    std::list<std::pair<int, point_2f>> getContain(Range range, float eps);
+
+    bool addPoint(point_2f point);
 };
