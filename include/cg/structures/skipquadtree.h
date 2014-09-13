@@ -2,6 +2,7 @@
 
 #include <list>
 #include <memory>
+#include <misc/random_utils.h>
 
 #include "cg/io/point.h"
 
@@ -110,10 +111,10 @@ using cg::vector_2f;
 
 #define P 0.7
 
+util::uniform_random_real<double, std::random_device> probabilityRand(0., 1.);
 
 bool isEagle() {
-    int randValue = std::rand();
-    return randValue < P * RAND_MAX;
+    return probabilityRand() < P;
 }
 
 // Range implementation BEGIN
