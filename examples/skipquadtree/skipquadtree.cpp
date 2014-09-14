@@ -83,8 +83,29 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
         return node;
     }
 
+    void drawRectangles(MiddleNode* node, cg::visualization::drawer_type &drawer) const {
+        Range r = node->range;
+        point_2f a(r.fromX, r.fromY);
+        point_2f b(r.fromX, r.toY);
+        point_2f c(r.toX, r.toY);
+        point_2f d(r.toX, r.fromY);
+        drawer.draw_line(a, b, 1);
+        drawer.draw_line(b, c, 1);
+        drawer.draw_line(c, d, 1);
+        drawer.draw_line(d, a, 1);
+        for (auto child : node->children) {
+            MiddleNode* childMiddle = dynamic_cast<MiddleNode*>(child.get());
+            if (childMiddle != NULL) {
+                drawRectangles(childMiddle, drawer);
+            }
+        }
+    }
+
     void draw(cg::visualization::drawer_type &drawer) const {
-        if (showLayout) {
+        if (layoutMode == 0) {
+            drawer.set_color(Qt::darkBlue);
+            drawRectangles(getRootFromSkipLevel(viewLevel), drawer);
+        } else if (layoutMode == 1) {
             drawer.set_color(Qt::darkBlue);
             for (int lvl = MAX_LEVEL_RENDER - 1; lvl >= 0; lvl--) {
                 float stepX = (MAX_X - MIN_X) / (2 << lvl);
@@ -105,7 +126,7 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
     void print(cg::visualization::printer_type &p) const {
         p.corner_stream() << "double-click to reset." << cg::visualization::endl
                 << "press mouse rbutton to add vertex (in blue layout)" << cg::visualization::endl
-                << "press l to disable blue layout" << cg::visualization::endl
+                << "press l to change blue layout mode (per node/full/disabled)" << cg::visualization::endl
                 << "press t to trace quad-tree structure in terminal" << cg::visualization::endl
                 << "press a/s to change level of quad tree to be represented (level="
                 << (viewLevel + 1) << "/" << tree.skipLevels << ")" << cg::visualization::endl
@@ -119,7 +140,7 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
 
     bool on_double_click(const point_2f &p) {
         isDeletingMode = false;
-        showLayout = true;
+        layoutMode = 0;
         nodeNextId = 1;
         tree = SkipQuadTree(MIN_X, MAX_X, MIN_Y, MAX_Y);
         viewLevel = 0;
@@ -187,7 +208,7 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
         } else if (key == Qt::Key_T) {
             printfDumpOfSkipLayer(viewLevel);
         } else if (key == Qt::Key_L) {
-            showLayout = !showLayout;
+            layoutMode = (layoutMode + 1) % 3;
         } else if (key == Qt::Key_R) {
             printf("Now choose two points of rectangle. (you can choose point by rbutton)\n");
             pointsCountToEnter = 2;
@@ -201,7 +222,7 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
 
 
 private:
-    bool showLayout = true;
+    int layoutMode = 0;
 
     SkipQuadTree tree = SkipQuadTree(MIN_X, MAX_X, MIN_Y, MAX_Y);
 
