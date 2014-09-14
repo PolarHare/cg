@@ -73,6 +73,8 @@ struct MiddleNode : Node {
 
     bool addPoint(point_2f point);
 
+    bool deletePoint(point_2f point, float eps);
+
     virtual std::list<std::pair<int, point_2f>> getContain(Range range, float eps) override;
 
     virtual std::list<std::pair<int, point_2f>> getAll() override;
@@ -108,6 +110,8 @@ struct SkipQuadTree {
     std::list<point_2f> getContain(Range range, float eps);
 
     bool addPoint(point_2f point);
+
+    bool deletePoint(point_2f point, float eps);
 };
 
 //_______________________________________________________IMPLEMENTATION_________________________________________________
@@ -419,6 +423,44 @@ bool MiddleNode::addPoint(point_2f point) {
         }
     }
 }
+
+
+bool MiddleNode::deletePoint(point_2f point, float eps) {
+    bool wasDeleted = false;
+    if (linkToMoreDetailed != NULL) {
+        wasDeleted = linkToMoreDetailed->deletePoint(point, eps);
+    }
+    int index = range.recognizePartId(point);
+    if (children[index] != NULL) {
+        MiddleNode *child = dynamic_cast<MiddleNode *>(children[index].get());
+        if (child != NULL) {
+            if (child->range.recognizePartId(point) != -1) {
+                if (child->deletePoint(point, eps)) {
+                    int countOfChildChildren = 0;
+                    std::shared_ptr<Node> childChild;
+                    for (int i = 0; i < 4 && countOfChildChildren < 2; i++) {
+                        if (child->children[i] != NULL) {
+                            countOfChildChildren++;
+                            childChild = child->children[i];
+                        }
+                    }
+                    if (countOfChildChildren == 1) {
+                        children[index] = childChild;
+                    }
+                    wasDeleted = true;
+                }
+            }
+        } else {
+            TermNode *term = (TermNode *) children[index].get();
+            if (term->point.x >= point.x - eps && term->point.x <= point.x + eps
+                    && term->point.y >= point.y - eps && term->point.y <= point.y + eps) {
+                children[index] = NULL;
+                wasDeleted = true;
+            }
+        }
+    }
+    return wasDeleted;
+}
 // MiddleNode implementation END
 
 // SkipQuadTree implementation BEGIN
@@ -468,5 +510,23 @@ bool SkipQuadTree::addPoint(point_2f p) {
         lowDetailedRoot = std::shared_ptr<MiddleNode>(newLevel);
     }
     return true;
+}
+
+bool SkipQuadTree::deletePoint(point_2f point, float eps) {
+    if (lowDetailedRoot->deletePoint(point, eps)) {
+        if (lowDetailedRoot->linkToMoreDetailed == NULL) {
+            return true;
+        }
+        for (int i = 0; i < 4; i++) {
+            if (lowDetailedRoot->children[i] != NULL) {
+                return true;
+            }
+        }
+        lowDetailedRoot = lowDetailedRoot->linkToMoreDetailed;
+        skipLevels--;
+        return true;
+    } else {
+        return false;
+    }
 }
 // SkipQuadTree implementation END

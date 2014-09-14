@@ -110,12 +110,15 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
                 << "press a/s to change level of quad tree to be represented (level="
                 << (viewLevel + 1) << "/" << tree.skipLevels << ")" << cg::visualization::endl
                 << "press r to enter points for rectangle selection (after that - two rclicks)" << cg::visualization::endl
-                << "nodesCount: " << nodesCount << cg::visualization::endl;
+                << "press d and click rbutton on existing point to delete it" << cg::visualization::endl
+                << "nodesCount: " << nodesCount << cg::visualization::endl
+        ;
 
         drawNodeNum(getRootFromSkipLevel(viewLevel), p);
     }
 
     bool on_double_click(const point_2f &p) {
+        isDeletingMode = false;
         showLayout = true;
         nodeNextId = 1;
         tree = SkipQuadTree(MIN_X, MAX_X, MIN_Y, MAX_Y);
@@ -140,9 +143,24 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
                 }
             }
             return true;
+        } else if (isDeletingMode) {
+            float eps = 5;
+            printf("Deleting one point with range=%f from click={x=%f y=%f}...\n", eps, p.x, p.y);
+            if (tree.deletePoint(p, eps)) {
+                printf(" Point deleted.\n");
+                if (viewLevel == tree.skipLevels) {
+                    viewLevel = tree.skipLevels - 1;
+                }
+            } else {
+                printf(" No point was found.\n");
+            }
+            isDeletingMode = false;
+            return true;
         } else {
-            printf("Adding point: x=%f y=%f\n", p.x, p.y);
-            tree.addPoint(p);
+            printf("Adding point: x=%f y=%f.\n", p.x, p.y);
+            if (!tree.addPoint(p)) {
+                printf(" Point was not added, because point is out of range!\n");
+            }
             return true;
         }
     }
@@ -164,12 +182,14 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
 
     bool on_key(int key) {
         if (key == Qt::Key_D) {
+            printf("Now choose existing point for deletion. (you can choose point by rbutton)\n");
+            isDeletingMode = true;
         } else if (key == Qt::Key_T) {
             printfDumpOfSkipLayer(viewLevel);
         } else if (key == Qt::Key_L) {
             showLayout = !showLayout;
         } else if (key == Qt::Key_R) {
-            printf("Now choose two points. (you can choose point by rbutton)\n");
+            printf("Now choose two points of rectangle. (you can choose point by rbutton)\n");
             pointsCountToEnter = 2;
         } else if (key == Qt::Key_S) {
             viewLevel = (viewLevel + 1) % tree.skipLevels;
@@ -189,6 +209,8 @@ private:
 
     int pointsCountToEnter = 0;
     point_2f pointsOfRect[2];
+
+    bool isDeletingMode = false;
 };
 
 int main(int argc, char **argv) {
