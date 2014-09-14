@@ -99,7 +99,13 @@ struct SkipQuadTree {
 
     SkipQuadTree(float fromX, float toX, float fromY, float toY);
 
-    std::list<std::pair<int, point_2f>> getContain(Range range, float eps);
+    std::list<std::pair<int, point_2f>> getContainWithId(point_2f p1, point_2f p2, float eps);
+
+    std::list<std::pair<int, point_2f>> getContainWithId(Range range, float eps);
+
+    std::list<point_2f> getContain(point_2f p1, point_2f p2, float eps);
+
+    std::list<point_2f> getContain(Range range, float eps);
 
     bool addPoint(point_2f point);
 };
@@ -109,12 +115,12 @@ struct SkipQuadTree {
 using cg::point_2f;
 using cg::vector_2f;
 
-#define P 0.7
+static double eagleProbability = 0.5;
 
 util::uniform_random_real<double, std::random_device> probabilityRand(0., 1.);
 
 bool isEagle() {
-    return probabilityRand() < P;
+    return probabilityRand() < eagleProbability;
 }
 
 // Range implementation BEGIN
@@ -421,13 +427,36 @@ SkipQuadTree::SkipQuadTree(float fromX, float toX, float fromY, float toY)
     lowDetailedRoot = std::shared_ptr<MiddleNode>(new MiddleNode(Range(0, fromX, toX, fromY, toY)));
 }
 
-std::list<std::pair<int, point_2f>> SkipQuadTree::getContain(Range range, float eps) {
+std::list<std::pair<int, point_2f>> SkipQuadTree::getContainWithId(point_2f p1, point_2f p2, float eps) {
+    Range rect(-1,
+            std::min(p1.x, p2.x), std::max(p1.x, p2.x),
+            std::min(p1.y, p2.y), std::max(p1.y, p2.y));
+    return getContainWithId(rect, eps);
+}
+
+std::list<std::pair<int, point_2f>> SkipQuadTree::getContainWithId(Range range, float eps) {
     return lowDetailedRoot->getContain(range, eps);
+}
+
+std::list<point_2f> SkipQuadTree::getContain(point_2f p1, point_2f p2, float eps) {
+    Range rect(-1,
+            std::min(p1.x, p2.x), std::max(p1.x, p2.x),
+            std::min(p1.y, p2.y), std::max(p1.y, p2.y));
+    return getContain(rect, eps);
+}
+
+std::list<point_2f> SkipQuadTree::getContain(Range range, float eps) {
+    std::list<std::pair<int, point_2f>> resWithIds = lowDetailedRoot->getContain(range, eps);
+    std::list<point_2f> res;
+    for (auto a : resWithIds) {
+        res.push_back(a.second);
+    }
+    return res;
 }
 
 bool SkipQuadTree::addPoint(point_2f p) {
     if (p.x < fromX || p.x >= toX
-            || p.y < fromY || p.y>=toY){
+            || p.y < fromY || p.y >= toY) {
         return false;
     }
     if (lowDetailedRoot->addPoint(p) && isEagle()) {

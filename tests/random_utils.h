@@ -4,11 +4,12 @@
 #include <cg/primitives/point.h>
 #include <misc/random_utils.h>
 
-inline std::vector<cg::point_2> uniform_points(size_t count)
+template <class Scalar = double>
+inline std::vector<cg::point_2t<Scalar>> uniform_points(size_t count)
 {
-    util::uniform_random_real<double> rand(-100., 100.);
+    util::uniform_random_real<Scalar> rand(-100., 100.);
 
-    std::vector<cg::point_2> res(count);
+    std::vector<cg::point_2t<Scalar>> res(count);
 
     for (size_t l = 0; l != count; ++l)
     {

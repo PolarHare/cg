@@ -23,12 +23,21 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
     }
 
     triangulation_viewer() {
-        tree.addPoint(point_2f(69, 70));
-        tree.addPoint(point_2f(30, 98));
+        tree.addPoint(point_2f(127, 24));
+        tree.addPoint(point_2f(213, 36));
+        tree.addPoint(point_2f(312, 114));
+        tree.addPoint(point_2f(312, 100));
+        tree.addPoint(point_2f(212, 202));
+        tree.addPoint(point_2f(53, 199));
+        tree.addPoint(point_2f(64, 200));
+        tree.addPoint(point_2f(231, -188));
+        tree.addPoint(point_2f(249, -175));
+        tree.addPoint(point_2f(-334, -23));
+        tree.addPoint(point_2f(-306, -6));
+        tree.addPoint(point_2f(-289, -99));
         for (int i = 0; i < tree.skipLevels; i++) {
             printfDumpOfSkipLayer(i);
         }
-        tree.addPoint(point_2f(110, 71));
     }
 
     void drawNodeNum(const MiddleNode *node, cg::visualization::printer_type &p) const {
@@ -100,7 +109,7 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
                 << "press t to trace quad-tree structure in terminal" << cg::visualization::endl
                 << "press a/s to change level of quad tree to be represented (level="
                 << (viewLevel + 1) << "/" << tree.skipLevels << ")" << cg::visualization::endl
-                << "press r to enter points for rectangle selection" << cg::visualization::endl
+                << "press r to enter points for rectangle selection (after that - two rclicks)" << cg::visualization::endl
                 << "nodesCount: " << nodesCount << cg::visualization::endl;
 
         drawNodeNum(getRootFromSkipLevel(viewLevel), p);
@@ -108,6 +117,7 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
 
     bool on_double_click(const point_2f &p) {
         showLayout = true;
+        nodeNextId = 1;
         tree = SkipQuadTree(MIN_X, MAX_X, MIN_Y, MAX_Y);
         viewLevel = 0;
         pointsCountToEnter = 0;
@@ -117,18 +127,14 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
     bool on_press(const point_2f &p) {
         if (pointsCountToEnter > 0) {
             pointsCountToEnter--;
-            xs[pointsCountToEnter] = p.x;
-            ys[pointsCountToEnter] = p.y;
+            pointsOfRect[pointsCountToEnter] = p;
             if (pointsCountToEnter == 1) {
                 printf("One point of rectangle:    x=%f y=%f\n", p.x, p.y);
             }
             if (pointsCountToEnter == 0) {
                 printf("Secont point of rectangle: x=%f y=%f\n", p.x, p.y);
-                Range rect(-1, std::min(xs[0], xs[1]), std::max(xs[0], xs[1]),
-                               std::min(ys[0], ys[1]), std::max(ys[0], ys[1]));
-                auto points = tree.getContain(rect, 0.1);
-                std::cout << rect << std::endl;
-                std::cout << "In rect " << rect << " points found: " << points.size() << std::endl;
+                auto points = tree.getContainWithId(pointsOfRect[0], pointsOfRect[1], 0.1);
+                std::cout << "In rect [" << pointsOfRect[0] << "; " << pointsOfRect[1] << "] points found: " << points.size() << std::endl;
                 for (std::pair<int, point_2f> pointWithId : points) {
                     std::cout << " id=" << pointWithId.first << "\t" << pointWithId.second << std::endl;
                 }
@@ -163,6 +169,7 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
         } else if (key == Qt::Key_L) {
             showLayout = !showLayout;
         } else if (key == Qt::Key_R) {
+            printf("Now choose two points. (you can choose point by rbutton)\n");
             pointsCountToEnter = 2;
         } else if (key == Qt::Key_S) {
             viewLevel = (viewLevel + 1) % tree.skipLevels;
@@ -181,8 +188,7 @@ private:
     int viewLevel = 0;
 
     int pointsCountToEnter = 0;
-    float xs[2];
-    float ys[2];
+    point_2f pointsOfRect[2];
 };
 
 int main(int argc, char **argv) {
