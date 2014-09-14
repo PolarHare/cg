@@ -64,7 +64,7 @@ std::vector<point_2f> makeUnique(std::vector<point_2f> points) {
 
 TEST(skipquadtree_initialization_getContain, test2) {
     size_t countOfPoints = 10000;
-    size_t countOfGetContainsQueries = 1000;
+    size_t countOfGetContainsQueries = 100;
     float eps = 0.1;
 
     SkipQuadTree tree(MIN_X, MAX_X, MIN_Y, MAX_Y);
@@ -116,7 +116,7 @@ TEST(skipquadtree_initialization_getContain, test2) {
             j++;
         }
         if (countOfOnEdge > 0) {
-            printf("Count of points on edge: %zu/%zu\n", countOfOnEdge, res.size());
+            printf("[          ] Count of points on edge: %zu/%zu\n", countOfOnEdge, res.size());
         }
     }
 }
