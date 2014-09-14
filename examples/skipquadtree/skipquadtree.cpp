@@ -12,6 +12,25 @@
 
 struct triangulation_viewer : cg::visualization::viewer_adapter {
 
+    void printfDumpOfSkipLayer(int level) {
+        printf("Skip-Quadtree dump (skip-level=%d)\n", level + 1);
+        MiddleNode *lvlRoot = tree.lowDetailedRoot.get();
+        for (int i = 1; i < tree.skipLevels - level; i++) {
+            lvlRoot = lvlRoot->linkToMoreDetailed.get();
+        }
+        traceMiddleNode(lvlRoot, 0);
+        printf("____________________________________________\n");
+    }
+
+    triangulation_viewer() {
+        tree.addPoint(point_2f(69, 70));
+        tree.addPoint(point_2f(30, 98));
+        for (int i = 0; i < tree.skipLevels; i++) {
+            printfDumpOfSkipLayer(i);
+        }
+        tree.addPoint(point_2f(110, 71));
+    }
+
     void drawNodeNum(const MiddleNode *node, cg::visualization::printer_type &p) const {
         p.global_stream(node->range.getMiddlePoint()) << node->id;
         for (int i = 0; i < 4; i++) {
@@ -123,13 +142,16 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
     }
 
     void traceMiddleNode(MiddleNode *node, int stackLevel) {
-        std::cout << "stackLevel=" << stackLevel << "\t " << node << std::endl;
+        std::cout << "stackLevel=" << stackLevel << "\t " << *node << std::endl;
         for (auto child : node->children) {
+            if (child == NULL) {
+                continue;
+            }
             MiddleNode *middleChild = dynamic_cast<MiddleNode *>(child.get());
             if (middleChild != NULL) {
                 traceMiddleNode(middleChild, stackLevel + 1);
             } else {
-                std::cout << "stackLevel=" << stackLevel << "\t " << (TermNode *) child.get() << std::endl;
+                std::cout << "stackLevel=" << stackLevel + 1 << "\t " << *((TermNode *) child.get()) << std::endl;
             }
         }
     }
@@ -137,13 +159,7 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
     bool on_key(int key) {
         if (key == Qt::Key_D) {
         } else if (key == Qt::Key_T) {
-            printf("_____Skip-Quadtree dump (skip-level=%d)_____\n", viewLevel + 1);
-            MiddleNode *lvlRoot = tree.lowDetailedRoot.get();
-            for (int i = 1; i < tree.skipLevels - viewLevel; i++) {
-                lvlRoot = lvlRoot->linkToMoreDetailed.get();
-            }
-            traceMiddleNode(lvlRoot, 0);
-            printf("________________________________________\n");
+            printfDumpOfSkipLayer(viewLevel);
         } else if (key == Qt::Key_L) {
             showLayout = !showLayout;
         } else if (key == Qt::Key_R) {

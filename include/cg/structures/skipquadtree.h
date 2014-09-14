@@ -151,7 +151,9 @@ Range Range::localize(point_2f point) {
     }
     return Range(lvl == -1 ? -1 : lvl + 1,
             resFromX, resToX, resFromY, resToY);
-}//13
+}
+
+//13
 //02
 int Range::recognizePartId(point_2f point) {
     if (point.x < fromX || point.x >= toX
@@ -177,13 +179,13 @@ std::ostream &operator<<(std::ostream &os, Range const &range) {
 
 // Node implementation BEGIN
 std::ostream &operator<<(std::ostream &os, Node const &node) {
-    os << "id=" << node.id << " ";
+    os << "id=" << node.id;
     const MiddleNode *middleNode = dynamic_cast<const MiddleNode *>(&node);
     if (middleNode != NULL) {
-        os << middleNode->range << "children[";
+        os << " " << middleNode->range << " children[";
         for (int i = 0; i < 4; i++) {
             if (middleNode->children[i] == NULL) {
-                os << "-";
+                os << "_";
             } else {
                 os << middleNode->children[i]->id;
             }
@@ -192,10 +194,16 @@ std::ostream &operator<<(std::ostream &os, Node const &node) {
             }
         }
         os << "]";
+        os << " link=";
+        if (middleNode->linkToMoreDetailed == NULL) {
+            os << "_";
+        } else {
+            os << middleNode->linkToMoreDetailed->id;
+        }
     } else {
         const TermNode *termNode = dynamic_cast<const TermNode *>(&node);
         assert (termNode != NULL);
-        os << termNode->point;
+        os << " " << termNode->point;
     }
     return os;
 }
@@ -338,13 +346,19 @@ bool MiddleNode::addPoint(point_2f point) {
                     std::shared_ptr<MiddleNode> commonNode(new MiddleNode(commonRange));
                     int commonNodePointIndex = commonRange.recognizePartId(point);
                     int commonNodeOldChildIndex = commonRange.recognizePartId(child->range.getMiddlePoint());
-                    MiddleNode *commonChild = dynamic_cast<MiddleNode *>(children[index].get());
-                    commonChild->children[commonNodePointIndex] = std::shared_ptr<Node>(new TermNode(point));
-                    commonChild->children[commonNodeOldChildIndex] = std::shared_ptr<Node>(child);
-                    if (linkToMoreDetailed != NULL) {
-                        commonChild->linkToMoreDetailed = std::dynamic_pointer_cast<MiddleNode, Node>(linkToMoreDetailed->children[index]);
-                    }
+                    commonNode->children[commonNodePointIndex] = std::shared_ptr<Node>(new TermNode(point));
+                    commonNode->children[commonNodeOldChildIndex] = children[index];
                     children[index] = commonNode;
+                    if (linkToMoreDetailed != NULL) {
+                        std::shared_ptr<MiddleNode> moreDetailed = linkToMoreDetailed;
+                        point_2f commonRangeMiddlePoint = commonRange.getMiddlePoint();
+                        while (moreDetailed->range.lvl != commonRange.lvl) {
+                            int commonRangeIdInMoreDetailed = moreDetailed->range.recognizePartId(commonRangeMiddlePoint);
+                            moreDetailed = std::dynamic_pointer_cast<MiddleNode, Node>(moreDetailed->children[commonRangeIdInMoreDetailed]);
+                            assert (moreDetailed != NULL);
+                        }
+                        commonNode->linkToMoreDetailed = moreDetailed;
+                    }
                     return true;
                 } else {
                     return false;
@@ -368,10 +382,17 @@ bool MiddleNode::addPoint(point_2f point) {
                 int commonNodeOldTermIndex = commonRange.recognizePartId(term->point);
                 commonNode->children[commonNodePointIndex] = std::shared_ptr<Node>(new TermNode(point));
                 commonNode->children[commonNodeOldTermIndex] = children[index];
-                if (linkToMoreDetailed != NULL) {
-                    commonNode->linkToMoreDetailed = std::dynamic_pointer_cast<MiddleNode, Node>(linkToMoreDetailed->children[index]);
-                }
                 children[index] = commonNode;
+                if (linkToMoreDetailed != NULL) {
+                    std::shared_ptr<MiddleNode> moreDetailed = linkToMoreDetailed;
+                    point_2f commonRangeMiddlePoint = commonRange.getMiddlePoint();
+                    while (moreDetailed->range.lvl != commonRange.lvl) {
+                        int commonRangeIdInMoreDetailed = moreDetailed->range.recognizePartId(commonRangeMiddlePoint);
+                        moreDetailed = std::dynamic_pointer_cast<MiddleNode, Node>(moreDetailed->children[commonRangeIdInMoreDetailed]);
+                        assert (moreDetailed != NULL);
+                    }
+                    commonNode->linkToMoreDetailed = moreDetailed;
+                }
                 return true;
             } else {
                 return false;
