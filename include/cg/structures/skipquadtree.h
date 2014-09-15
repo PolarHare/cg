@@ -22,7 +22,7 @@ struct Range {
     }
 
     Range(float fromX, float toX, float fromY, float toY)
-            : Range(-1, fromX, toX, fromY, toY) {
+            : Range(-239, fromX, toX, fromY, toY) {
     }
 
     float getMiddleX() const;
@@ -71,6 +71,9 @@ struct MiddleNode : Node {
     MiddleNode(Range range) : range(range) {
     }
 
+    virtual ~MiddleNode() {
+    }
+
     bool addPoint(point_2f point);
 
     bool deletePoint(point_2f point, float eps);
@@ -86,20 +89,17 @@ struct TermNode : Node {
     TermNode(point_2f point) : point(point) {
     }
 
+    virtual ~TermNode() {
+    }
+
     virtual std::list<std::pair<int, point_2f>> getContain(Range range, float eps) override;
 
     virtual std::list<std::pair<int, point_2f>> getAll() override;
 };
 
 struct SkipQuadTree {
-    float fromX;
-    float toX;
-    float fromY;
-    float toY;
     int skipLevels = 1;
-    std::shared_ptr<MiddleNode> lowDetailedRoot;
-
-    SkipQuadTree(float fromX, float toX, float fromY, float toY);
+    std::shared_ptr<Node> lowDetailedRoot;
 
     std::list<std::pair<int, point_2f>> getContainWithId(point_2f p1, point_2f p2, float eps);
 
@@ -159,8 +159,7 @@ Range Range::localize(point_2f point) {
         resFromY = getMiddleY();
         resToY = toY;
     }
-    return Range(lvl == -1 ? -1 : lvl + 1,
-            resFromX, resToX, resFromY, resToY);
+    return Range(lvl + 1, resFromX, resToX, resFromY, resToY);
 }
 
 //13
@@ -232,9 +231,41 @@ std::list<std::pair<int, point_2f>> TermNode::getContain(Range range, float eps)
 std::list<std::pair<int, point_2f>> TermNode::getAll() {
     return {{id, point}};
 }
+
 // TermNode implementation END
+Range determineCommonRange(point_2f p1, point_2f p2) {
+    float half = std::max(std::abs(p2.x - p1.x), std::abs(p2.y - p1.y));
+    float middleX = (p2.x + p1.x) / 2;
+    float middleY = (p2.y + p1.y) / 2;
+    float resFromX = middleX - half;
+    float resToX = middleX + half;
+    float resFromY = middleY - half;
+    float resToY = middleY + half;
+    return Range(0, resFromX, resToX, resFromY, resToY);
+}
 
-
+Range determineCommonRange(point_2f point, Range range) {
+    float resFromX = range.fromX;
+    float resToX = range.toX;
+    float resFromY = range.fromY;
+    float resToY = range.toY;
+    int resLvl = range.lvl;
+    while (point.x < resFromX || point.x >= resToX
+            || point.y < resFromY || point.y >= resToY) {
+        if (point.x >= resToX) {
+            resToX = 2 * resToX - resFromX;
+        } else {
+            resFromX = 2 * resFromX - resToX;
+        }
+        if (point.y >= resToY) {
+            resToY = 2 * resToY - resFromY;
+        } else {
+            resFromY = 2 * resFromY - resToY;
+        }
+        resLvl--;
+    }
+    return Range(resLvl, resFromX, resToX, resFromY, resToY);
+}
 
 Range determineCommonRange(point_2f point, MiddleNode *node, Range min) {
     Range range = node->range;
@@ -464,66 +495,138 @@ bool MiddleNode::deletePoint(point_2f point, float eps) {
 // MiddleNode implementation END
 
 // SkipQuadTree implementation BEGIN
-SkipQuadTree::SkipQuadTree(float fromX, float toX, float fromY, float toY)
-        : fromX(fromX), toX(toX), fromY(fromY), toY(toY) {
-    lowDetailedRoot = std::shared_ptr<MiddleNode>(new MiddleNode(Range(0, fromX, toX, fromY, toY)));
-}
 
 std::list<std::pair<int, point_2f>> SkipQuadTree::getContainWithId(point_2f p1, point_2f p2, float eps) {
-    Range rect(-1,
+    Range rect(-239,
             std::min(p1.x, p2.x), std::max(p1.x, p2.x),
             std::min(p1.y, p2.y), std::max(p1.y, p2.y));
     return getContainWithId(rect, eps);
 }
 
 std::list<std::pair<int, point_2f>> SkipQuadTree::getContainWithId(Range range, float eps) {
-    return lowDetailedRoot->getContain(range, eps);
+    if (lowDetailedRoot != NULL) {
+        return lowDetailedRoot->getContain(range, eps);
+    } else {
+        return {};
+    }
 }
 
 std::list<point_2f> SkipQuadTree::getContain(point_2f p1, point_2f p2, float eps) {
-    Range rect(-1,
+    Range rect(-239,
             std::min(p1.x, p2.x), std::max(p1.x, p2.x),
             std::min(p1.y, p2.y), std::max(p1.y, p2.y));
     return getContain(rect, eps);
 }
 
 std::list<point_2f> SkipQuadTree::getContain(Range range, float eps) {
-    std::list<std::pair<int, point_2f>> resWithIds = lowDetailedRoot->getContain(range, eps);
     std::list<point_2f> res;
-    for (auto a : resWithIds) {
-        res.push_back(a.second);
+    if (lowDetailedRoot != NULL) {
+        std::list<std::pair<int, point_2f>> resWithIds = lowDetailedRoot->getContain(range, eps);
+        for (auto a : resWithIds) {
+            res.push_back(a.second);
+        }
     }
     return res;
 }
 
 bool SkipQuadTree::addPoint(point_2f p) {
-    if (p.x < fromX || p.x >= toX
-            || p.y < fromY || p.y >= toY) {
-        return false;
+    if (lowDetailedRoot == NULL) {
+        lowDetailedRoot = std::shared_ptr<TermNode>(new TermNode(p));
+        return true;
     }
-    if (lowDetailedRoot->addPoint(p) && isEagle()) {
-        skipLevels++;
-
-        MiddleNode *newLevel = new MiddleNode(Range(0, fromX, toX, fromY, toY));
-        newLevel->addPoint(p);
-        newLevel->linkToMoreDetailed = lowDetailedRoot;
-        lowDetailedRoot = std::shared_ptr<MiddleNode>(newLevel);
+    MiddleNode *root = dynamic_cast<MiddleNode *>(lowDetailedRoot.get());
+    if (root == NULL) {
+        TermNode *oldRoot = dynamic_cast<TermNode *>(lowDetailedRoot.get());
+        if (oldRoot->point.x == p.x && oldRoot->point.y == p.y) {
+            return true;
+        }
+        Range commonRange = determineCommonRange(p, oldRoot->point);
+        std::shared_ptr<MiddleNode> commonNode(new MiddleNode(commonRange));
+        int commonNodePointIndex = commonRange.recognizePartId(p);
+        int commonNodeOldPointIndex = commonRange.recognizePartId(oldRoot->point);
+        commonNode->children[commonNodePointIndex] = std::shared_ptr<Node>(new TermNode(p));
+        commonNode->children[commonNodeOldPointIndex] = lowDetailedRoot;
+        lowDetailedRoot = commonNode;
+        return true;
+    } else {
+        if (root->range.recognizePartId(p) == -1) {
+            Range commonRange = determineCommonRange(p, root->range);
+            MiddleNode *prevRoot = NULL;
+            MiddleNode *curRoot = root;
+            std::shared_ptr<Node> curRootNode = lowDetailedRoot;
+            std::shared_ptr<MiddleNode> prevNewRootNode;
+            int commonNodePointIndex = commonRange.recognizePartId(p);
+            int commonNodeOldChildIndex = commonRange.recognizePartId(curRoot->range.getMiddlePoint());
+            bool lowestSkipLvl = true;
+            while (true) {
+                std::shared_ptr<MiddleNode> commonNode(new MiddleNode(commonRange));
+                commonNode->children[commonNodePointIndex] = std::shared_ptr<Node>(new TermNode(p));
+                commonNode->children[commonNodeOldChildIndex] = curRootNode;
+                if (lowestSkipLvl) {
+                    lowDetailedRoot = commonNode;
+                    lowestSkipLvl = false;
+                } else {
+                    prevRoot->linkToMoreDetailed = std::dynamic_pointer_cast<MiddleNode>(curRootNode);
+                    prevNewRootNode->linkToMoreDetailed = commonNode;
+                }
+                if (curRoot->linkToMoreDetailed != NULL) {
+                    prevRoot = curRoot;
+                    curRootNode = curRoot->linkToMoreDetailed;
+                    curRoot = curRoot->linkToMoreDetailed.get();
+                    prevNewRootNode = commonNode;
+                } else {
+                    break;
+                }
+            }
+            return true;
+        } else if (root->addPoint(p) && isEagle()) {
+            MiddleNode *newLevel = new MiddleNode(root->range);
+            newLevel->addPoint(p);
+            newLevel->linkToMoreDetailed = std::dynamic_pointer_cast<MiddleNode>(lowDetailedRoot);
+            lowDetailedRoot = std::shared_ptr<MiddleNode>(newLevel);
+            skipLevels++;
+            return true;
+        }
     }
     return true;
 }
 
 bool SkipQuadTree::deletePoint(point_2f point, float eps) {
-    if (lowDetailedRoot->deletePoint(point, eps)) {
-        if (lowDetailedRoot->linkToMoreDetailed == NULL) {
+    if (lowDetailedRoot == NULL) {
+        return false;
+    }
+    MiddleNode *root = dynamic_cast<MiddleNode *>(lowDetailedRoot.get());
+    if (root == NULL) {
+        TermNode *rootP = dynamic_cast<TermNode *>(lowDetailedRoot.get());
+        if (rootP->point.x >= point.x - eps && rootP->point.x <= point.x + eps
+                && rootP->point.y >= point.y - eps && rootP->point.y <= point.y + eps) {
+            lowDetailedRoot = NULL;
             return true;
+        } else {
+            return false;
         }
+    }
+    if (root->deletePoint(point, eps)) {
+        int rootChilds = 0;
+        std::shared_ptr<Node> child;
         for (int i = 0; i < 4; i++) {
-            if (lowDetailedRoot->children[i] != NULL) {
-                return true;
+            if (root->children[i] != NULL) {
+                rootChilds++;
+                child = root->children[i];
             }
         }
-        lowDetailedRoot = lowDetailedRoot->linkToMoreDetailed;
-        skipLevels--;
+        if (root->linkToMoreDetailed == NULL) {
+            if (rootChilds == 1) {
+                lowDetailedRoot = child;
+            }
+            return true;
+        }
+        if (rootChilds >= 1) {
+            return true;
+        } else {
+            lowDetailedRoot = root->linkToMoreDetailed;
+            skipLevels--;
+        }
         return true;
     } else {
         return false;

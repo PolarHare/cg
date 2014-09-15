@@ -14,7 +14,7 @@
 TEST(skipquadtree_initialization, test1) {
     size_t countOfPoints = 10000;
 
-    SkipQuadTree tree(MIN_X, MAX_X, MIN_Y, MAX_Y);
+    SkipQuadTree tree;
     std::vector<point_2f> points = uniform_points<float>(countOfPoints, -COORD_RANGE / 2, COORD_RANGE / 2);
     for (point_2f point : points) {
         tree.addPoint(point);
@@ -24,7 +24,7 @@ TEST(skipquadtree_initialization, test1) {
 TEST(skipquadtree_initialization, test2) {
     size_t countOfPoints = 100000;
 
-    SkipQuadTree tree(MIN_X, MAX_X, MIN_Y, MAX_Y);
+    SkipQuadTree tree;
     std::vector<point_2f> points = uniform_points<float>(countOfPoints, -COORD_RANGE / 2, COORD_RANGE / 2);
     for (point_2f point : points) {
         tree.addPoint(point);
@@ -36,7 +36,7 @@ TEST(skipquadtree_initialization_getContain, test1) {
     size_t countOfGetContainsQueries = 10000;
     float eps = 0.1;
 
-    SkipQuadTree tree(MIN_X, MAX_X, MIN_Y, MAX_Y);
+    SkipQuadTree tree;
     std::vector<point_2f> points = uniform_points<float>(countOfPoints, -COORD_RANGE / 2, COORD_RANGE / 2);
     for (point_2f point : points) {
         tree.addPoint(point);
@@ -68,7 +68,7 @@ TEST(skipquadtree_initialization_getContain, test2) {
     size_t countOfGetContainsQueries = 100;
     float eps = 0.1;
 
-    SkipQuadTree tree(MIN_X, MAX_X, MIN_Y, MAX_Y);
+    SkipQuadTree tree;
     std::vector<point_2f> points = uniform_points<float>(countOfPoints - 2, -COORD_RANGE / 2, COORD_RANGE / 2);
     points.push_back(point_2f(0.239, 0.2391));
     points.push_back(point_2f(0.239, 0.2391));

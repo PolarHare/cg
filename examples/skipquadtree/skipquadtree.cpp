@@ -14,11 +14,20 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
 
     void printfDumpOfSkipLayer(int level) {
         printf("Skip-Quadtree dump (skip-level=%d)\n", level + 1);
-        MiddleNode *lvlRoot = tree.lowDetailedRoot.get();
-        for (int i = 1; i < tree.skipLevels - level; i++) {
-            lvlRoot = lvlRoot->linkToMoreDetailed.get();
+        if (tree.lowDetailedRoot == NULL) {
+            printf("Empty\n");
+        } else {
+            MiddleNode *lvlRoot = dynamic_cast<MiddleNode *>(tree.lowDetailedRoot.get());
+            if (lvlRoot != NULL) {
+                for (int i = 1; i < tree.skipLevels - level; i++) {
+                    lvlRoot = lvlRoot->linkToMoreDetailed.get();
+                }
+                traceMiddleNode(lvlRoot, 0);
+            } else {
+                TermNode *termNode = dynamic_cast<TermNode *>(tree.lowDetailedRoot.get());
+                std::cout << "stackLevel=" << 0 << "\t " << *termNode << std::endl;
+            }
         }
-        traceMiddleNode(lvlRoot, 0);
         printf("____________________________________________\n");
     }
 
@@ -40,7 +49,15 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
         }
     }
 
-    void drawNodeNum(const MiddleNode *node, cg::visualization::printer_type &p) const {
+    void drawNodeNum(const Node *n, cg::visualization::printer_type &p) const {
+        if (n == NULL) {
+            return;
+        }
+        const MiddleNode *node = dynamic_cast<const MiddleNode *>(n);
+        if (node == NULL) {
+            p.global_stream(((TermNode *) n)->point) << n->id;
+            return;
+        }
         p.global_stream(node->range.getMiddlePoint()) << node->id;
         for (int i = 0; i < 4; i++) {
             if (node->children[i] != NULL) {
@@ -54,7 +71,20 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
         }
     }
 
-    void drawNode(const MiddleNode *node, cg::visualization::drawer_type &drawer) const {
+    void drawNode(TermNode *node, cg::visualization::drawer_type &drawer) const {
+        drawer.set_color(Qt::green);
+        drawer.draw_point(node->point, 2);
+    }
+
+    void drawNode(const Node *n, cg::visualization::drawer_type &drawer) const {
+        if (n == NULL) {
+            return;
+        }
+        const MiddleNode *node = dynamic_cast<const MiddleNode *>(n);
+        if (node == NULL) {
+            drawNode(dynamic_cast<const TermNode *>(node), drawer);
+            return;
+        }
         drawer.set_color(Qt::red);
         drawer.draw_point(node->range.getMiddlePoint(), 3);//MAX_LEVEL_RENDER + 2);
         for (int i = 0; i < 4; i++) {
@@ -67,34 +97,44 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
                 } else {
                     drawer.set_color(Qt::gray);
                     drawer.draw_line(node->range.getMiddlePoint(), ((TermNode *) node->children[i].get())->point, 1);
-                    drawer.set_color(Qt::green);
-                    drawer.draw_point(((TermNode *) node->children[i].get())->point, 2);
+                    drawNode((TermNode *) node->children[i].get(), drawer);
                 }
             }
         }
     }
 
-    MiddleNode *getRootFromSkipLevel(int viewLevel) const {
-        MiddleNode* node = tree.lowDetailedRoot.get();
-        for (int i = 1; i < tree.skipLevels - viewLevel; i++) {
-            node = node->linkToMoreDetailed.get();
-            assert (node != NULL);
+    Node *getRootFromSkipLevel(int viewLevel) const {
+        MiddleNode *node = dynamic_cast<MiddleNode *>(tree.lowDetailedRoot.get());
+        if (node != NULL) {
+            for (int i = 1; i < tree.skipLevels - viewLevel; i++) {
+                node = node->linkToMoreDetailed.get();
+                assert (node != NULL);
+            }
+            return node;
+        } else {
+            return tree.lowDetailedRoot.get();
         }
-        return node;
     }
 
-    void drawRectangles(MiddleNode* node, cg::visualization::drawer_type &drawer) const {
+    void drawRectangles(MiddleNode *node, cg::visualization::drawer_type &drawer) const {
         Range r = node->range;
         point_2f a(r.fromX, r.fromY);
         point_2f b(r.fromX, r.toY);
         point_2f c(r.toX, r.toY);
         point_2f d(r.toX, r.fromY);
+        drawer.set_color(Qt::blue);
         drawer.draw_line(a, b, 1);
         drawer.draw_line(b, c, 1);
         drawer.draw_line(c, d, 1);
         drawer.draw_line(d, a, 1);
+
+        float middleX = (r.fromX + r.toX) / 2;
+        float middleY = (r.fromY + r.toY) / 2;
+        drawer.set_color(Qt::darkBlue);
+        drawer.draw_line(point_2f(middleX, r.fromY), point_2f(middleX, r.toY));
+        drawer.draw_line(point_2f(r.fromX, middleY), point_2f(r.toX, middleY));
         for (auto child : node->children) {
-            MiddleNode* childMiddle = dynamic_cast<MiddleNode*>(child.get());
+            MiddleNode *childMiddle = dynamic_cast<MiddleNode *>(child.get());
             if (childMiddle != NULL) {
                 drawRectangles(childMiddle, drawer);
             }
@@ -103,20 +143,9 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
 
     void draw(cg::visualization::drawer_type &drawer) const {
         if (layoutMode == 0) {
-            drawer.set_color(Qt::darkBlue);
-            drawRectangles(getRootFromSkipLevel(viewLevel), drawer);
-        } else if (layoutMode == 1) {
-            drawer.set_color(Qt::darkBlue);
-            for (int lvl = MAX_LEVEL_RENDER - 1; lvl >= 0; lvl--) {
-                float stepX = (MAX_X - MIN_X) / (2 << lvl);
-                float stepY = (MAX_Y - MIN_Y) / (2 << lvl);
-                int thickness = MAX_LEVEL_RENDER - lvl + 1;
-                for (int xi = 1; xi < 2 << lvl; xi++) {
-                    drawer.draw_line(point_2f(MIN_X + xi * stepX, MIN_Y), point_2f(MIN_X + xi * stepX, MAX_Y), thickness);
-                }
-                for (int yi = 1; yi < 2 << lvl; yi++) {
-                    drawer.draw_line(point_2f(MIN_X, MIN_Y + yi * stepY), point_2f(MAX_X, MIN_Y + yi * stepY), thickness);
-                }
+            MiddleNode *node = dynamic_cast<MiddleNode *>(getRootFromSkipLevel(viewLevel));
+            if (node != NULL) {
+                drawRectangles(node, drawer);
             }
         }
 
@@ -124,16 +153,15 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
     }
 
     void print(cg::visualization::printer_type &p) const {
-        p.corner_stream() << "double-click to reset." << cg::visualization::endl
-                << "press mouse rbutton to add vertex (in blue layout)" << cg::visualization::endl
-                << "press l to change blue layout mode (per node/full/disabled)" << cg::visualization::endl
-                << "press t to trace quad-tree structure in terminal" << cg::visualization::endl
-                << "press a/s to change level of quad tree to be represented (level="
+        p.corner_stream() << "press DOUBLE-CLICK to clear" << cg::visualization::endl
+                << "press mouse RBUTTON to add vertex" << cg::visualization::endl
+                << "press L to change blue layout mode (per node/disabled)" << cg::visualization::endl
+                << "press T to trace quad-tree structure in terminal" << cg::visualization::endl
+                << "press A/S to change level of quad tree to be represented (level="
                 << (viewLevel + 1) << "/" << tree.skipLevels << ")" << cg::visualization::endl
-                << "press r to enter points for rectangle selection (after that - two rclicks)" << cg::visualization::endl
-                << "press d and click rbutton on existing point to delete it" << cg::visualization::endl
-                << "nodesCount: " << nodesCount << cg::visualization::endl
-        ;
+                << "press R to enter points for rectangle selection (after that - two RBUTTONS)" << cg::visualization::endl
+                << "press D and click RBUTTON on existing point to delete it" << cg::visualization::endl
+                << "nodesCount: " << nodesCount << cg::visualization::endl;
 
         drawNodeNum(getRootFromSkipLevel(viewLevel), p);
     }
@@ -142,7 +170,7 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
         isDeletingMode = false;
         layoutMode = 0;
         nodeNextId = 1;
-        tree = SkipQuadTree(MIN_X, MAX_X, MIN_Y, MAX_Y);
+        tree = SkipQuadTree();
         viewLevel = 0;
         pointsCountToEnter = 0;
         return true;
@@ -208,7 +236,7 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
         } else if (key == Qt::Key_T) {
             printfDumpOfSkipLayer(viewLevel);
         } else if (key == Qt::Key_L) {
-            layoutMode = (layoutMode + 1) % 3;
+            layoutMode = (layoutMode + 1) % 2;
         } else if (key == Qt::Key_R) {
             printf("Now choose two points of rectangle. (you can choose point by rbutton)\n");
             pointsCountToEnter = 2;
@@ -224,7 +252,7 @@ struct triangulation_viewer : cg::visualization::viewer_adapter {
 private:
     int layoutMode = 0;
 
-    SkipQuadTree tree = SkipQuadTree(MIN_X, MAX_X, MIN_Y, MAX_Y);
+    SkipQuadTree tree;
 
     int viewLevel = 0;
 
